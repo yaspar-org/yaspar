@@ -1,0 +1,333 @@
+use crate::ast::*;
+use crate::tokens::*;
+use crate::position::*;
+use crate::action::*;
+use dashu::integer::UBig;
+use dashu::float::DBig;
+
+grammar<T>(recursor: &mut T) where T: ParsingAction;
+
+extern {
+    type Location = Position;
+    type Error = GrammarError;
+
+    enum Token {
+        "<numeral>" => Token::Numeral(<UBig>),
+        "<decimal>" => Token::Decimal(<DBig>),
+        "<hexadecimal>" => Token::Hexadecimal(<(Vec<u8>, usize)>),
+        "<binary>" => Token::Binary(<(Vec<u8>, usize)>),
+        "<string>" => Token::String(<String>),
+        "<simp-symbol>" => Token::SimpSymbol(<String>),
+        "<quot-symbol>" => Token::QuotSymbol(<String>),
+        "BINARY" => Token::RWBinary,
+        "DECIMAL" => Token::RWDecimal,
+        "HEXADECIMAL" => Token::RWHexadecimal,
+        "STRING" => Token::RWString,
+        "_" => Token::Underscore,
+        "!" => Token::Exclamation,
+        "as" => Token::As,
+        "let" => Token::Let,
+        "exists" => Token::Exists,
+        "forall" => Token::Forall,
+        "match" => Token::Match,
+        "par" => Token::Par,
+        "true" => Token::True,
+        "false" => Token::False,
+        "lambda" => Token::Lambda,
+        "(" => Token::Lparen,
+        ")" => Token::Rparen,
+        ":named" => Token::Keyword(Keyword::Named),
+        ":pattern" => Token::Keyword(Keyword::Pattern),
+        "<keyword>" => Token::Keyword(<Keyword>),
+        "assert" => Token::Command(crate::tokens::Command::Assert),
+        "check-sat" => Token::Command(crate::tokens::Command::CheckSat),
+        "check-sat-assuming" => Token::Command(crate::tokens::Command::CheckSatAssuming),
+        "declare-const" => Token::Command(crate::tokens::Command::DeclareConst),
+        "declare-datatype" => Token::Command(crate::tokens::Command::DeclareDatatype),
+        "declare-datatypes" => Token::Command(crate::tokens::Command::DeclareDatatypes),
+        "declare-fun" => Token::Command(crate::tokens::Command::DeclareFun),
+        "declare-sort" => Token::Command(crate::tokens::Command::DeclareSort),
+        "declare-sort-parameter" => Token::Command(crate::tokens::Command::DeclareSortParameter),
+        "define-const" => Token::Command(crate::tokens::Command::DefineConst),
+        "define-fun" => Token::Command(crate::tokens::Command::DefineFun),
+        "define-fun-rec" => Token::Command(crate::tokens::Command::DefineFunRec),
+        "define-funs-rec" => Token::Command(crate::tokens::Command::DefineFunsRec),
+        "define-sort" => Token::Command(crate::tokens::Command::DefineSort),
+        "echo" => Token::Command(crate::tokens::Command::Echo),
+        "exit" => Token::Command(crate::tokens::Command::Exit),
+        "get-assertions" => Token::Command(crate::tokens::Command::GetAssertions),
+        "get-assignment" => Token::Command(crate::tokens::Command::GetAssignment),
+        "get-info" => Token::Command(crate::tokens::Command::GetInfo),
+        "get-model" => Token::Command(crate::tokens::Command::GetModel),
+        "get-option" => Token::Command(crate::tokens::Command::GetOption),
+        "get-proof" => Token::Command(crate::tokens::Command::GetProof),
+        "get-unsat-assumptions" => Token::Command(crate::tokens::Command::GetUnsatAssumptions),
+        "get-unsat-core" => Token::Command(crate::tokens::Command::GetUnsatCore),
+        "get-value" => Token::Command(crate::tokens::Command::GetValue),
+        "pop" => Token::Command(crate::tokens::Command::Pop),
+        "push" => Token::Command(crate::tokens::Command::Push),
+        "reset" => Token::Command(crate::tokens::Command::Reset),
+        "reset-assertions" => Token::Command(crate::tokens::Command::ResetAssertions),
+        "set-info" => Token::Command(crate::tokens::Command::SetInfo),
+        "set-logic" => Token::Command(crate::tokens::Command::SetLogic),
+        "set-option" => Token::Command(crate::tokens::Command::SetOption),
+    }
+}
+
+// Symbols: A〈symbol> is either a simple symbol or a quoted symbol. A simple
+// symbol is any non-empty sequence of elements of 〈letter> and 〈digit> and
+// the characters ~ ! @ $ % ^ & * _ - + = < > . ? / that does not start with a
+// digit and is not a reserved word.
+//
+// A quoted symbol is any sequence of whitespace characters and printable characters that
+// starts and ends with | and does not contain | or \ .
+
+// The symbol "not" needs special treatment because it is used explicitly in the rule for PropLiteral.
+// As a result, "not" does not match the first rule for SimpleSymbol and we need an explicit rule for it here.
+// See https://lalrpop.github.io/lalrpop/lexer_tutorial/001_lexer_gen.html.
+
+pub Symbol: T::Str = {
+    <start: @L> <s:"<simp-symbol>"> <end: @R> =>? recursor.on_string(Range::new(start, end), s),
+    <start: @L> <s:"<quot-symbol>"> <end: @R> =>? recursor.on_string(Range::new(start, end), s),
+};
+
+// Keywords: A〈keyword> is a token of the form :〈simple_symbol>. Elements of this category
+// have a special use in the language. They are used as attribute names or option names (see
+// later)
+
+pub Keyword: Keyword = {
+    <kw:"<keyword>"> => kw,
+}
+
+//〈spec_constant>::=〈numeral >|〈decimal >|〈hexadecimal >|〈binary > |〈string >
+//〈s_expr>::=〈spec_constant>|〈symbol >|〈reserved >|〈keyword >| (〈s_expr >∗ )
+
+SpecConstant: T::Constant = {
+    <start: @L> <tup:"<binary>"> <end: @R> =>? recursor.on_constant_binary(Range::new(start, end), tup.0, tup.1),
+    <start: @L> <n:"<numeral>"> <end: @R> =>? recursor.on_constant_numeral(Range::new(start, end), n),
+    <start: @L> <d:"<decimal>"> <end: @R> =>? recursor.on_constant_decimal(Range::new(start, end), d),
+    <start: @L> <tup:"<hexadecimal>"> <end: @R> =>? recursor.on_constant_hexadecimal(Range::new(start, end), tup.0, tup.1),
+    <start: @L> <s:"<string>"> <end: @R> =>? {
+        let s = recursor.on_string(Range::new(start, end), s)?;
+        recursor.on_constant_string(Range::new(start, end), s)
+    },
+    <start: @L> "true" <end: @R> =>? recursor.on_constant_bool(Range::new(start, end), true),
+    <start: @L> "false" <end: @R> =>? recursor.on_constant_bool(Range::new(start, end), false),
+}
+
+// Identifiers:
+// 〈index >::=〈numeral >|〈symbol>
+// 〈identifier >::=〈symbol >| (_〈symbol > 〈index >+ )
+
+// To support the String theory, we have to accept hexadecimal constants as Indexes.
+// to allow things like `(_ char x4E)` even though SMT-LIB 2.6 says that only Symbols and Numerals
+// can be used. See: https://smt-lib.org/theories-UnicodeStrings.shtml.
+Index: T::Index = {
+    <start: @L> <n: "<numeral>"> <end: @R> =>? recursor.on_index_numeral(Range::new(start, end), n),
+    <start: @L> <s: Symbol> <end: @R> =>? recursor.on_index_symbol(Range::new(start, end), s),
+    <start: @L> <tup: "<hexadecimal>"> <end: @R> =>? recursor.on_index_hexadecimal(Range::new(start, end), tup.0, tup.1),
+}
+
+pub Identifier: T::Identifier = {
+    <start: @L> <s:Symbol> <end: @R> =>? recursor.on_identifier(Range::new(start, end), s, vec![]),
+    <start: @L> "(" "_" <s:Symbol> <i: Index+> ")" <end: @R> =>? recursor.on_identifier(Range::new(start, end), s, i),
+}
+
+// Attribute names belong to the 〈keyword > category. Attribute values are in
+// general s-expressions other than keywords, although most predefined
+// attributes use a more restricted category for their values.
+//
+//〈attribute_value>::=〈spec_constant>|〈symbol>| (〈s_expr >∗)
+//〈attribute> ::=〈keyword >|〈keyword>〈attribute_value>
+
+pub Attribute: T::Attribute = {
+    <start: @L> ":named" <s:Symbol> <end: @R> =>? recursor.on_attribute_named(Range::new(start, end), s),
+    <start: @L> ":pattern" "(" <ts:Term*> ")" <end: @R> =>? recursor.on_attribute_pattern(Range::new(start, end), ts),
+    <start: @L> <k:Keyword> <end: @R> =>? recursor.on_attribute_keyword(Range::new(start, end), k),
+    <start: @L> <k:Keyword> <s:SpecConstant> <end: @R> =>? recursor.on_attribute_constant(Range::new(start, end), k, s),
+    <start: @L> <k:Keyword> <s:Symbol> <end: @R> =>? recursor.on_attribute_symbol(Range::new(start, end), k, s),
+}
+
+// Sorts: syntactically, a sort symbol can be either the distinguished symbol
+// Bool or any 〈identifier>. A sort parameter can be any 〈symbol >
+// (which in turn, is an 〈identifier>).
+//
+//〈sort> ::= <identifier > | ( <identifier > <sort>+ )
+
+pub Sort: T::Sort = {
+    <start: @L> <i: Identifier> <end: @R> =>? recursor.on_sort(Range::new(start, end), i, vec![]),
+    <start: @L> "(" <i: Identifier> <s: Sort+> ")" <end: @R> =>? recursor.on_sort(Range::new(start, end), i, s)
+}
+
+//<var_binding > ::= ( <symbol > <term> )
+pub VarBinding: (T::Str, T::Term) = {
+    "(" <sym: Symbol> <t: Term> ")" => (sym, t)
+}
+
+// <symbol_> ::= <symbol> | _
+pub SymbolUnderscore: Option<T::Str> = {
+    <s: Symbol> => Some(s),
+    "_" => None,
+}
+
+//<pattern> ::= <symbol_> | ( <symbol_> <symbol>+ )
+pub Pattern: Pattern<T::Str> = {
+    <head: SymbolUnderscore> => Pattern::Single(head),
+    "(" <head: Symbol> <tail: SymbolUnderscore+> ")" =>
+        Pattern::Applied { head, tail },
+}
+
+//<match_case> ::= (<pattern><term>)
+pub MatchCase: (Pattern<T::Str>, T::Term) = {
+    "(" <p: Pattern> <t: Term> ")" => (p, t)
+}
+
+//<qual_identifier > ::= <identifier > | ( as <identifier > <sort> )
+pub QualIdentifier: (T::Identifier, Option<T::Sort>) = {
+    <i: Identifier> => (i, None),
+    "(" "as" <i: Identifier> <s: Sort> ")" => (i, Some(s)),
+}
+
+//<sorted_var>::= (<symbol><sort>)
+pub SortedVar: (T::Str, T::Sort) = {
+    "(" <sym: Symbol> <sort: Sort> ")" => (sym, sort)
+}
+
+// Terms:
+//<term> ::= <spec_constant>
+//          | <qual_identifier >
+//          | ( <qual_identifier > <term>+ )
+//          | ( let ( <var_binding >+ ) <term> )
+//          | ( lambda ( <sorted_var >+ ) <term> )
+//          | ( forall ( <sorted_var >+ ) <term> )
+//          | ( exists ( <sorted_var >+ ) <term> )
+//          | ( match <term> ( <match_case>+ ) )
+//          | ( !<term><attribute>+ )
+
+pub Term: T::Term = {
+    <start: @L> <c: SpecConstant> <end: @R> =>? recursor.on_term_constant(Range::new(start, end), c),
+    <start: @L> <q: QualIdentifier> <end: @R> =>? recursor.on_term_identifier(Range::new(start, end), q.0, q.1),
+    <start: @L> "(" <q: QualIdentifier> <t:Term+> ")" <end: @R> =>? recursor.on_term_app(Range::new(start, end), q.0, q.1, t),
+    <start: @L> "(" "let" "(" <v: VarBinding+> ")" <t: Term> ")" <end: @R> =>? recursor.on_term_let(Range::new(start, end), v, t),
+    <start: @L> "(" "lambda" "(" <s: SortedVar+> ")" <t: Term> ")" <end: @R> =>? recursor.on_term_lambda(Range::new(start, end), s, t),
+    <start: @L> "(" "forall" "(" <s: SortedVar+> ")" <t: Term> ")" <end: @R> =>? recursor.on_term_forall(Range::new(start, end), s, t),
+    <start: @L> "(" "exists" "(" <s: SortedVar+> ")" <t: Term> ")" <end: @R> =>? recursor.on_term_exists(Range::new(start, end), s, t),
+    <start: @L> "(" "match" <t: Term> "(" <m:MatchCase+> ")" ")" <end: @R> =>? recursor.on_term_match(Range::new(start, end), t, m),
+    <start: @L> "(" "!" <t: Term> <a: Attribute+> ")" <end: @R> =>? recursor.on_term_annotated(Range::new(start, end), t, a),
+}
+
+// <sort_dec> ::= ( <symbol > <numeral > )
+SortDec: SortDec<T::Str> = {
+    "(" <s: Symbol> <n:"<numeral>"> ")" => SortDec(s, n)
+}
+
+// <selector_dec> ::= ( <symbol> <sort> )
+SelectorDec: (T::Str, T::Sort) = {
+    "(" <sym: Symbol> <sort: Sort> ")" => (sym, sort)
+}
+
+// <constructor_dec> ::= ( <symbol> <selector_dec>∗ )
+ConstructorDec: ConstructorDec<T::Str, T::Sort> = {
+    "(" <sym: Symbol> <selector_dec: SelectorDec*> ")" => ConstructorDec(sym, selector_dec)
+}
+
+// <datatype_dec> ::= ( <constructor_dec>+ ) | ( par ( <symbol>+ ) ( <constructor_dec>+ ) )
+DatatypeDec: DatatypeDec<T::Str, T::Sort> = {
+    "(" <cd: ConstructorDec+> ")" => DatatypeDec {  params: vec![], constructors: cd },
+    "(" "par" "(" <syms: Symbol+> ")" "(" <cd: ConstructorDec+> ")" ")" =>
+        DatatypeDec {  params: syms, constructors: cd },
+}
+
+// <function_dec> ::= ( <symbol> ( <sorted_var>∗ ) <sort> )
+FunctionDec: (T::Str, Vec<(T::Str, T::Sort)>, T::Sort) = {
+    "(" <sym:Symbol> "(" <vars:SortedVar*> ")" <sort: Sort> ")" => (sym, vars, sort)
+}
+
+// <function_def> ::= <symbol> ( <sorted_var>∗ ) <sort> <term>
+FunctionDef: FunctionDef<T::Str, T::Sort, T::Term> = {
+    <sym:Symbol> "(" <vars:SortedVar*> ")" <sort: Sort> <t:Term> => 
+        FunctionDef { name: sym, vars, out_sort: sort, body: t, },
+}
+
+// Commands
+pub Command: T::Command = {
+    <start: @L> "(" "assert" <t:Term> ")" <end: @R> =>? recursor.on_command_assert(Range::new(start, end), t),
+    <start: @L> "(" "check-sat" ")" <end: @R> =>? recursor.on_command_check_sat(Range::new(start, end)),
+    <start: @L> "(" "check-sat-assuming" "(" <ts: Term*> ")" ")" <end: @R> =>?
+        recursor.on_command_check_sat_assuming(Range::new(start, end), ts),
+    <start: @L> "(" "declare-const" <sym: Symbol> <sort: Sort> ")" <end: @R> =>?
+        recursor.on_command_declare_const(Range::new(start, end), sym, sort),
+    <start: @L> "(" "declare-datatype" <sym: Symbol> <dd: DatatypeDec> ")" <end: @R> =>?
+        recursor.on_command_declare_datatype(Range::new(start, end), sym, dd),
+
+    <start: @L> "(" "declare-datatypes" "(" <sorts: SortDec+> ")" "(" <dd: DatatypeDec+> ")" ")" <end: @R> =>?
+        sanitize_declare_datatypes(Range::new(start, end), sorts, dd).and_then(|(r, defs)| recursor.on_command_declare_datatypes(r, defs)),
+
+    <start: @L> "(" "declare-fun" <sym: Symbol> "(" <args: Sort*> ")" <returns: Sort> ")" <end: @R> =>?
+        recursor.on_command_declare_fun(Range::new(start, end), sym, args, returns),
+
+    <start: @L> "(" "declare-sort" <s:Symbol> <n:"<numeral>"> ")" <end: @R> =>?
+        recursor.on_command_declare_sort(Range::new(start, end), s, n),
+
+    <start: @L> "(" "declare-sort-parameter" <sym: Symbol> ")" <end: @R> =>?
+            recursor.on_command_declare_sort_parameter(Range::new(start, end), sym),
+
+    <start: @L> "(" "define-const" <sym: Symbol> <returns: Sort> <t:Term> ")" <end: @R> =>?
+        recursor.on_command_define_const(Range::new(start, end), sym, returns, t),
+
+    <start: @L> "(" "define-fun" <f:FunctionDef> ")" <end: @R> =>?
+        recursor.on_command_define_fun(Range::new(start, end), f),
+
+    <start: @L> "(" "define-fun-rec" <f:FunctionDef> ")" <end: @R> =>?
+        recursor.on_command_define_fun_rec(Range::new(start, end), f),
+
+    <start: @L> "(" "define-funs-rec" "(" <f:FunctionDec+> ")" "(" <t:Term+> ")" ")" <end: @R> =>?
+        sanitize_define_funs_rec(Range::new(start, end), f, t).and_then(|(range, defs)| recursor.on_command_define_funs_rec(range, defs)),
+
+    <start: @L> "(" "define-sort" <s1:Symbol> "(" <s2:Symbol*> ")" <sort:Sort> ")" <end: @R> =>?
+        recursor.on_command_define_sort(Range::new(start, end), s1, s2, sort),
+
+    <start: @L> "(" "echo" <s:"<string>"> ")" <end: @R> =>? {
+        let s = recursor.on_string(Range::new(start, end), s)?;
+        recursor.on_command_echo(Range::new(start, end), s)
+    },
+
+    <start: @L> "(" "exit" ")" <end: @R> =>? recursor.on_command_exit(Range::new(start, end)),
+
+    <start: @L> "(" "get-assertions" ")" <end: @R> =>? recursor.on_command_get_assertions(Range::new(start, end)),
+
+    <start: @L> "(" "get-assignment" ")" <end: @R> =>? recursor.on_command_get_assignment(Range::new(start, end)),
+
+    <start: @L> "(" "get-info" <k:Keyword> ")" <end: @R> =>? recursor.on_command_get_info(Range::new(start, end), k),
+
+    <start: @L> "(" "get-model" ")" <end: @R> =>? recursor.on_command_get_model(Range::new(start, end)),
+
+    <start: @L> "(" "get-option" <k:Keyword> ")" <end: @R> =>? recursor.on_command_get_option(Range::new(start, end), k),
+
+    <start: @L> "(" "get-proof" ")" <end: @R> =>? recursor.on_command_get_proof(Range::new(start, end)),
+
+    <start: @L> "(" "get-unsat-assumptions" ")" <end: @R> =>? recursor.on_command_get_unsat_assumptions(Range::new(start, end)),
+
+    <start: @L> "(" "get-unsat-core" ")" <end: @R> =>? recursor.on_command_get_unsat_core(Range::new(start, end)),
+
+    <start: @L> "(" "get-value" "(" <t:Term+> ")" ")" <end: @R> =>? recursor.on_command_get_value(Range::new(start, end), t),
+
+    <start: @L> "(" "pop" <n:"<numeral>"> ")" <end: @R> =>? recursor.on_command_pop(Range::new(start, end), n),
+
+    <start: @L> "(" "push" <n:"<numeral>"> ")" <end: @R> =>? recursor.on_command_push(Range::new(start, end), n),
+
+    <start: @L> "(" "reset" ")" <end: @R> =>? recursor.on_command_reset(Range::new(start, end)),
+
+    <start: @L> "(" "reset-assertions" ")" <end: @R> =>? recursor.on_command_reset_assertions(Range::new(start, end)),
+
+    <start: @L> "(" "set-info" <a:Attribute> ")" <end: @R> =>? recursor.on_command_set_info(Range::new(start, end), a),
+
+    <start: @L> "(" "set-logic" <s:Symbol> ")" <end: @R> =>? recursor.on_command_set_logic(Range::new(start, end), s),
+
+    <start: @L> "(" "set-option" <a: Attribute> ")" <end: @R> =>? recursor.on_command_set_option(Range::new(start, end), a),
+
+}
+
+pub Script: Vec<T::Command> = {
+    <c:Command*> => c
+}

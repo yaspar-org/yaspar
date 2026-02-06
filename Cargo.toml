@@ -1,0 +1,38 @@
+[package]
+name = "yaspar"
+version = "2.7.0"
+edition = "2024"
+readme = "README.md"
+license = "Apache-2.0"
+description = "Yet Another SMT Parser, a SMTLib 2.7 compliant parsing library"
+authors = ["the Amazon Trusted Solver team"]
+keywords = ["SMT", "solver", "logic"]
+categories = ["science"]
+homepage = "https://github.com/yaspar-org/yaspar"
+repository = "https://github.com/yaspar-org/yaspar"
+
+# lalrpop parser generation is driven via build.rs
+build = "build.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+lalrpop-util = { version = "0.22", features = ["lexer"] }
+dashu = { version = "0.4.2", features = ["num-traits"] }
+phf = { version = "0.11", features = ["macros"] }
+lazy_static = "1.5.0"
+serde = { version = "1", features = ["derive"] }
+num-traits = "0.2.19"
+
+[dev-dependencies]
+derive-new = "0.6"
+
+[build-dependencies]
+lalrpop = "0.22"
+
+[[bin]]
+name = "yaspar"
+
+[lib]
+name = "yaspar"
+path = "src/lib.rs"
+crate-type = ["lib"]
