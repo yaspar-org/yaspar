@@ -43,7 +43,6 @@ jobs:
         rust: [ stable ]
         features:
           - ''
-          - 'cadical'
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout sources

@@ -11,7 +11,7 @@
 //! of [char]s allows various underlying implementations, and therefore brings in more flexibilities
 //! in actual use cases.
 
-use crate::ast::{GrammarError, Keyword, KEYWORD_MAP};
+use crate::ast::{GrammarError, KEYWORD_MAP, Keyword};
 use crate::position::{Position, Range};
 use crate::utils::{binary_to_string, hex_to_string, parse_binary_str, parse_hexadecimal_str};
 use crate::{smt_quoted_symbol_to_string, smt_string_to_string};

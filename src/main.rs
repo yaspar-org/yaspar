@@ -1,11 +1,11 @@
 //! A simple cli to parse some smtlib and dump ouw what we parsed....
 
-use yaspar::action::UnitAction;
-use yaspar::smtlib2::ScriptParser;
-use yaspar::tokenize_str;
 use clap::Parser;
 use std::fs;
 use std::time::Instant;
+use yaspar::action::UnitAction;
+use yaspar::smtlib2::ScriptParser;
+use yaspar::tokenize_str;
 
 #[derive(Parser, Debug)]
 struct Cli {
