@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 //! # Yaspar
 //!
 //! Yaspar is a parsing library strictly following the SMTLib standard.

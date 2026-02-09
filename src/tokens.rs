@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 //! # A Tokenizer for SMTLib
 //!
 //! This module implements a tokenizer for SMTLib scripts. This tokenizer is only meant to be passed

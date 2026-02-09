@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 //! The `ast` module contains the types that represent the values parsed from smt-lib.
 
 use crate::position::Range;
