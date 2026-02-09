@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 //! A simple cli to parse some smtlib and dump ouw what we parsed....
 
 use clap::Parser;

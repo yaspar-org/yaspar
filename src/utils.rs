@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 /// parse a string containing only '0' and '1' into a vector of bytes
 pub fn parse_binary_str(s: &str) -> (Vec<u8>, usize) {
     let mut ret = Vec::new();

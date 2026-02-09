@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 use std::fmt::Display;
 
 // todo: lalrpop requires position information to implement Copy. this is not optimal. remove Copy once lalrpop fixes this problem
