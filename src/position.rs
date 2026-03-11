@@ -1,8 +1,18 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+//! # Source position tracking
+//!
+//! Types for tracking source locations within an SMT-LIB input stream.
+//! Every token and error carries a [`Range`] (start/end [`Position`]) so that
+//! diagnostics can point to the exact location in the source text.
+
 use std::fmt::Display;
 
+/// A position in the source text, tracking line, column, and absolute character offset.
+///
+/// All fields are 0-based internally. The [`Display`] implementation shows 1-based
+/// line and column numbers for human-readable output.
 // todo: lalrpop requires position information to implement Copy. this is not optimal. remove Copy once lalrpop fixes this problem
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Position {
@@ -21,6 +31,7 @@ impl Display for Position {
 }
 
 impl Position {
+    /// Creates a position at the origin (line 0, column 0, char 0).
     pub fn empty() -> Self {
         Self {
             lin_num: 0,
@@ -29,6 +40,7 @@ impl Position {
         }
     }
 
+    /// Advances the position by one character. Newlines reset the column and increment the line.
     pub fn incr(&mut self, c: char) {
         self.char_num += 1;
         if c == '\n' {
@@ -46,6 +58,7 @@ impl Default for Position {
     }
 }
 
+/// A half-open source range `[start, end)` used to locate tokens and errors.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Range {
     pub start: Position,

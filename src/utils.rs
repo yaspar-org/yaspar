@@ -1,7 +1,14 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-/// parse a string containing only '0' and '1' into a vector of bytes
+//! # Binary and hexadecimal encoding utilities
+//!
+//! Helper functions for converting between SMT-LIB binary/hexadecimal string
+//! representations and their byte-vector forms. These are used internally by the
+//! tokenizer and are also re-exported from the crate root.
+
+/// Parses a binary string (containing only `'0'` and `'1'`) into a little-endian byte vector
+/// and the original string length.
 pub fn parse_binary_str(s: &str) -> (Vec<u8>, usize) {
     let mut ret = Vec::new();
     let mut r: u8 = 0;
@@ -41,7 +48,9 @@ fn byte_to_string(mut b: u8, len: usize) -> String {
     chars.into_iter().collect()
 }
 
-/// assume len >= the necessary number of bits to encode `bytes`
+/// Converts a little-endian byte vector back into a binary string of the given `len`.
+///
+/// Assumes `len` is at least the number of bits needed to encode `bytes`.
 pub fn binary_to_string(bytes: &[u8], len: usize) -> String {
     if !bytes.is_empty() {
         let mut buf = byte_to_string(bytes[bytes.len() - 1], len % 8);
@@ -63,7 +72,8 @@ fn hex_char_to_num(c: char) -> u8 {
     c.to_digit(16).unwrap() as u8
 }
 
-/// parse a string containing only '0-9a-zA-Z' into a vector of bytes
+/// Parses a hexadecimal string (containing only `0-9`, `a-f`, `A-F`) into a little-endian
+/// byte vector and the original string length.
 pub fn parse_hexadecimal_str(s: &str) -> (Vec<u8>, usize) {
     let mut ret = Vec::new();
     let mut r: u8 = 0;
@@ -83,7 +93,9 @@ pub fn parse_hexadecimal_str(s: &str) -> (Vec<u8>, usize) {
     (ret, s.len())
 }
 
-/// assume len >= the necessary number of hex codes to encode `bytes`
+/// Converts a little-endian byte vector back into a lowercase hexadecimal string of the given `len`.
+///
+/// Assumes `len` is at least the number of hex digits needed to encode `bytes`.
 pub fn hex_to_string(bytes: &[u8], len: usize) -> String {
     if !bytes.is_empty() {
         let mut hex = bytes[0..bytes.len() - 1]

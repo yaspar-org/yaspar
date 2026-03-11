@@ -25,6 +25,10 @@ use std::collections::VecDeque;
 use std::fmt::Display;
 use std::str::FromStr;
 
+/// SMT-LIB command keywords recognized during tokenization.
+///
+/// Each variant corresponds to a standard SMT-LIB 2.7 command. The tokenizer maps
+/// command strings (e.g. `"assert"`, `"check-sat"`) to these variants via [`COMMAND_MAP`].
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Command {
     Assert,
@@ -61,6 +65,7 @@ pub enum Command {
     SetOption,
 }
 
+/// Compile-time map from command name strings to [`Command`] variants.
 pub static COMMAND_MAP: phf::Map<&'static str, Command> = phf_map! {
     "assert" => Command::Assert,
     "check-sat" => Command::CheckSat,
@@ -136,6 +141,18 @@ impl Display for Command {
     }
 }
 
+/// All token types produced by the [`Tokenizer`].
+///
+/// Tokens fall into several categories:
+/// - Literals: [`Numeral`](Token::Numeral), [`Decimal`](Token::Decimal),
+///   [`Hexadecimal`](Token::Hexadecimal), [`Binary`](Token::Binary), [`String`](Token::String)
+/// - Symbols: [`SimpSymbol`](Token::SimpSymbol) (simple), [`QuotSymbol`](Token::QuotSymbol) (quoted)
+/// - Reserved words: `BINARY`, `DECIMAL`, `HEXADECIMAL`, `NUMERAL`, `STRING`, `_`, `!`, `as`,
+///   `let`, `exists`, `forall`, `match`, `par`, `lambda`
+/// - Boolean constants: [`True`](Token::True), [`False`](Token::False)
+/// - Parentheses: [`Lparen`](Token::Lparen), [`Rparen`](Token::Rparen)
+/// - Keywords: [`Keyword`](Token::Keyword)
+/// - Commands: [`Command`](Token::Command)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     // Literals
@@ -179,6 +196,7 @@ pub enum Token {
     Command(Command),
 }
 
+/// Compile-time map from special symbol strings to their [`Token`] variants.
 pub static SPECIAL_SYMBOLS: phf::Map<&'static str, Token> = phf_map! {
     "BINARY" => Token::RWBinary,
     "DECIMAL" => Token::RWDecimal,
@@ -198,8 +216,7 @@ pub static SPECIAL_SYMBOLS: phf::Map<&'static str, Token> = phf_map! {
     "lambda" => Token::Lambda,
 };
 
-/// Check whether s is a special symbol that's reserved
-/// currently, all special symbols are reserved, except for "true", and "false"
+/// Returns `true` if `s` is a reserved special symbol (all special symbols except `true`/`false`).
 pub fn is_reserved_special_symbol(s: &str) -> bool {
     SPECIAL_SYMBOLS.contains_key(s) && s != "true" && s != "false"
 }
@@ -238,13 +255,34 @@ impl Display for Token {
     }
 }
 
+/// A token together with its source [`Range`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RangedToken {
     tok: Token,
     range: Range,
 }
 
-/// The tokenizer object
+/// A streaming tokenizer for SMT-LIB input.
+///
+/// Wraps any `Iterator<Item = char>` and lazily produces tokens. This design allows
+/// tokenization from files, network streams, or in-memory strings without buffering
+/// the entire input.
+///
+/// The tokenizer is also an [`Iterator`] itself, yielding
+/// `Result<(Position, Token, Position), GrammarError>` triples suitable for LALRPOP.
+///
+/// # Examples
+///
+/// ```rust
+/// use yaspar::Tokenizer;
+///
+/// let mut tok = Tokenizer::new("(check-sat)".chars(), false);
+/// // Iterate over tokens:
+/// for result in tok {
+///     let (start, token, end) = result.unwrap();
+///     println!("{token} at {start}..{end}");
+/// }
+/// ```
 pub struct Tokenizer<T> {
     /// Iterator
     iter: T,
@@ -257,6 +295,9 @@ pub struct Tokenizer<T> {
 }
 
 impl<T> Tokenizer<T> {
+    /// Creates a new tokenizer.
+    ///
+    /// Set `handle_block_comment` to `true` to recognize `#| ... |#` block comments.
     pub fn new(iter: T, handle_block_comment: bool) -> Self {
         Self {
             iter,
@@ -267,15 +308,17 @@ impl<T> Tokenizer<T> {
     }
 }
 
+/// Result type for a single tokenization step.
 pub type TokenizeResult = Result<RangedToken, GrammarError>;
 
-/// Check wheather a character is printable as per SMTLib standard
+/// Returns `true` if `c` is a printable character per the SMT-LIB standard (codes 32–126 or ≥ 128).
 pub fn is_printable(c: char) -> bool {
     let code = c as u32;
     (32..=126).contains(&code) || 128 <= code
 }
 
-/// Check whether a character is simple as per SMTLib standard
+/// Returns `true` if `c` belongs to the SMT-LIB simple symbol character set
+/// (alphanumeric plus `! $ % & * + - . / < = > ? @ ^ _ ~`).
 pub fn is_simple(c: char) -> bool {
     c.is_ascii_alphanumeric()
         || c == '!'
@@ -297,12 +340,12 @@ pub fn is_simple(c: char) -> bool {
         || c == '~'
 }
 
-/// Check whether a character is simple and legal as a start character as per SMTLib standard
+/// Returns `true` if `c` is a valid first character of a simple symbol (i.e. [`is_simple`] but not a digit).
 pub fn is_simple_start(c: char) -> bool {
     is_simple(c) && !c.is_ascii_digit()
 }
 
-/// Check whether a character is a delimiter as per SMTLib standard
+/// Returns `true` if `c` is a token delimiter (whitespace, `(`, `)`, or `;`).
 pub fn is_delimiter(c: char) -> bool {
     c.is_ascii_whitespace() || c == '(' || c == ')' || c == ';'
 }

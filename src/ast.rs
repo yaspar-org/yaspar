@@ -1,7 +1,16 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-//! The `ast` module contains the types that represent the values parsed from smt-lib.
+//! # AST data types
+//!
+//! This module contains the types that represent values parsed from SMT-LIB input:
+//!
+//! - [`GrammarError`] — errors produced during tokenization or grammar validation.
+//! - [`Keyword`] — the set of predefined and user-defined SMT-LIB keywords.
+//! - [`SortDec`], [`ConstructorDec`], [`DatatypeDec`], [`DatatypeDef`] — algebraic datatype
+//!   declarations.
+//! - [`FunctionDef`] — function definitions used by `define-fun`, `define-fun-rec`, and
+//!   `define-funs-rec` commands.
 
 use crate::position::Range;
 use dashu::integer::UBig;
@@ -9,26 +18,25 @@ use phf::phf_map;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
+/// Errors that can occur during tokenization or grammar-level validation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GrammarError {
-    TokenizeError {
-        range: Range,
-        buf: String,
-    },
+    /// An invalid token was encountered at the given source range.
+    TokenizeError { range: Range, buf: String },
+    /// The number of sort declarations does not match the number of datatype definitions.
     DatatypeDeclarationError {
         range: Range,
         num_datatypes: usize,
         num_defs: usize,
     },
+    /// The number of recursive function signatures does not match the number of bodies.
     RecFunsDefinitionError {
         range: Range,
         num_funs: usize,
         num_bodies: usize,
     },
-    Other {
-        range: Range,
-        message: String,
-    },
+    /// A catch-all for other grammar errors.
+    Other { range: Range, message: String },
 }
 
 fn limit_str_len(s: &str, l: usize) -> String {
@@ -80,6 +88,10 @@ impl Display for GrammarError {
     }
 }
 
+/// SMT-LIB keywords (`:keyword` syntax).
+///
+/// Predefined keywords for standard options and info flags are represented as dedicated
+/// variants. All other keywords are captured by [`Keyword::Other`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Keyword {
     // Options
@@ -140,6 +152,7 @@ pub static KEYWORD_MAP: phf::Map<&'static str, Keyword> = phf_map! {
 };
 
 impl Keyword {
+    /// Returns the keyword text without the leading colon.
     pub fn symbol_of(&self) -> &str {
         match self {
             Keyword::DiagnosticOutputChannel => "diagnostic-output-channel",
@@ -176,12 +189,15 @@ impl Display for Keyword {
     }
 }
 
+/// A sort declaration: a name and its arity (number of sort parameters).
 #[derive(Debug, Eq, PartialEq)]
 pub struct SortDec<Str>(pub Str, pub UBig);
 
+/// A constructor declaration within a datatype: a name and a list of (selector-name, sort) pairs.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ConstructorDec<Str, S>(pub Str, pub Vec<(Str, S)>);
 
+/// A function definition as used by `define-fun`, `define-fun-rec`, and `define-funs-rec`.
 #[derive(Debug, Eq, PartialEq)]
 pub struct FunctionDef<Str, S, T> {
     /// name of the function
@@ -194,6 +210,7 @@ pub struct FunctionDef<Str, S, T> {
     pub body: T,
 }
 
+/// A datatype declaration, possibly parametric.
 #[derive(Debug, Eq, PartialEq)]
 pub struct DatatypeDec<Str, S> {
     /// sort parameters introduced by `par`
@@ -203,6 +220,7 @@ pub struct DatatypeDec<Str, S> {
     pub constructors: Vec<ConstructorDec<Str, S>>,
 }
 
+/// A named datatype definition, pairing a sort name with its [`DatatypeDec`].
 #[derive(Debug, Eq, PartialEq)]
 pub struct DatatypeDef<Str, S> {
     /// name of the datatype; sort

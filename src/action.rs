@@ -1,6 +1,33 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+//! # Parsing action callbacks
+//!
+//! This module defines the trait hierarchy that drives Yaspar's callback-based parsing.
+//! Instead of producing a fixed AST, the LALRPOP-generated parsers invoke methods on a
+//! user-supplied *action* object at each grammar production. This lets callers build
+//! arbitrary representations — or none at all — during a single pass.
+//!
+//! ## Trait hierarchy
+//!
+//! The traits form a layered hierarchy, each extending the previous:
+//!
+//! | Trait | Handles |
+//! |---|---|
+//! | [`ActionOnString`] | String literals and symbol text |
+//! | [`ActionOnConstant`] | Numerals, decimals, binary/hex literals, booleans |
+//! | [`ActionOnIndex`] | Indexed identifier indices |
+//! | [`ActionOnIdentifier`] | Simple and indexed identifiers |
+//! | [`ActionOnAttribute`] | Keyword attributes and `:named` / `:pattern` |
+//! | [`ActionOnSort`] | Sort expressions |
+//! | [`ActionOnTerm`] | All term forms (application, let, quantifiers, match, annotation) |
+//! | [`ParsingAction`] | Top-level SMT-LIB commands (assert, check-sat, declare-fun, …) |
+//!
+//! ## Reference implementation
+//!
+//! [`UnitAction`] implements every trait with `type T = ()` and `Ok(())` bodies, making it
+//! useful for pure syntax validation without allocating any AST nodes.
+
 use crate::ast::{DatatypeDec, DatatypeDef, FunctionDef, GrammarError, Keyword, SortDec};
 use crate::position::{Position, Range};
 use crate::tokens::Token;
@@ -10,11 +37,17 @@ use lalrpop_util::ParseError;
 use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 
+/// Alias for parser results throughout the callback traits.
+///
+/// Wraps [`lalrpop_util::ParseError`] parameterized with Yaspar's position, token, and error types.
 pub type ParsingResult<T> = Result<T, ParseError<Position, Token, GrammarError>>;
 
+/// A match pattern used in SMT-LIB `match` expressions.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Pattern<S> {
+    /// A single variable or nullary constructor binding.
     Single(Option<S>),
+    /// A constructor application pattern with a head symbol and tail bindings.
     Applied { head: S, tail: Vec<Option<S>> },
 }
 
@@ -98,13 +131,18 @@ pub(crate) fn sanitize_define_funs_rec<Str, S, T>(
 
 // now we list a set of callback traits
 
+/// Callback for string values encountered during parsing.
 pub trait ActionOnString {
+    /// The user-defined string representation type.
     type Str;
 
+    /// Called when a string value (symbol text, string literal content, etc.) is parsed.
     fn on_string(&mut self, range: Range, s: String) -> ParsingResult<Self::Str>;
 }
 
+/// Callbacks for SMT-LIB constant literals (numerals, decimals, binary, hex, strings, booleans).
 pub trait ActionOnConstant: ActionOnString {
+    /// The user-defined constant representation type.
     type Constant;
 
     /// bytes: `little-endian decoding of bytes`, len: `length of the original binary string`
@@ -137,7 +175,9 @@ pub trait ActionOnConstant: ActionOnString {
     fn on_constant_bool(&mut self, range: Range, boolean: bool) -> ParsingResult<Self::Constant>;
 }
 
+/// Callbacks for index values inside indexed identifiers (`(_ symbol index+)`).
 pub trait ActionOnIndex: ActionOnString {
+    /// The user-defined index representation type.
     type Index;
 
     fn on_index_numeral(&mut self, range: Range, index: UBig) -> ParsingResult<Self::Index>;
@@ -151,7 +191,9 @@ pub trait ActionOnIndex: ActionOnString {
     ) -> ParsingResult<Self::Index>;
 }
 
+/// Callbacks for identifiers — both simple symbols and indexed identifiers.
 pub trait ActionOnIdentifier: ActionOnIndex {
+    /// The user-defined identifier representation type.
     type Identifier;
 
     fn on_identifier(
@@ -162,6 +204,7 @@ pub trait ActionOnIdentifier: ActionOnIndex {
     ) -> ParsingResult<Self::Identifier>;
 }
 
+/// Callbacks for attributes (keyword-value pairs, `:named`, and `:pattern`).
 pub trait ActionOnAttribute: ActionOnConstant {
     type Term;
     type Attribute;
@@ -195,6 +238,7 @@ pub trait ActionOnAttribute: ActionOnConstant {
     ) -> ParsingResult<Self::Attribute>;
 }
 
+/// Callbacks for sort expressions.
 pub trait ActionOnSort: ActionOnIdentifier {
     type Sort;
 
@@ -206,6 +250,8 @@ pub trait ActionOnSort: ActionOnIdentifier {
     ) -> ParsingResult<Self::Sort>;
 }
 
+/// Callbacks for all term forms: constants, identifiers, applications, let-bindings,
+/// lambda, quantifiers (exists/forall), match, and annotated terms.
 pub trait ActionOnTerm:
     ActionOnConstant + ActionOnIdentifier + ActionOnSort + ActionOnAttribute
 {
@@ -273,11 +319,15 @@ pub trait ActionOnTerm:
     ) -> ParsingResult<Self::Term>;
 }
 
-/// Implement this trait to specify parsing actions
+/// The top-level callback trait for SMT-LIB commands.
 ///
-/// Functions in this trait are called at proper time during parsing.
+/// Implement this trait (and its super-traits) to receive callbacks for every command
+/// in an SMT-LIB script. The associated types determine the representation you build
+/// during parsing.
 ///
-/// Specify the type members to specify the result of these functions
+/// # Example
+///
+/// See [`UnitAction`] for a minimal implementation that discards all parsed data.
 pub trait ParsingAction:
     ActionOnConstant + ActionOnIdentifier + ActionOnSort + ActionOnAttribute + ActionOnTerm
 {
@@ -391,7 +441,19 @@ pub trait ParsingAction:
     ) -> ParsingResult<Self::Command>;
 }
 
-/// Use this object when only the grammatical validity of a SMTLib script matters
+/// A no-op action that accepts all grammatically valid input and discards parsed data.
+///
+/// All associated types are `()` and every callback returns `Ok(())`. This is useful for
+/// pure syntax validation:
+///
+/// ```rust
+/// use yaspar::action::UnitAction;
+/// use yaspar::{smtlib2, tokenize_str};
+///
+/// let result = smtlib2::ScriptParser::new()
+///     .parse(&mut UnitAction, tokenize_str("(check-sat)", false));
+/// assert!(result.is_ok());
+/// ```
 pub struct UnitAction;
 
 impl ActionOnString for UnitAction {
