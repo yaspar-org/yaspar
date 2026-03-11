@@ -1,7 +1,8 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A simple cli to parse some smtlib and dump ouw what we parsed....
+//! CLI tool that parses an SMT-LIB file and reports the number of commands parsed
+//! along with the elapsed time. Useful for quick validation and benchmarking.
 
 use clap::Parser;
 use std::fs;

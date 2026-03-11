@@ -3,18 +3,63 @@
 
 //! # Yaspar
 //!
-//! Yaspar is a parsing library strictly following the SMTLib standard.
+//! **Y**et **A**nother **S**MT **Pa**rser in **R**ust — a parsing library strictly following the
+//! [SMT-LIB 2.7](https://smt-lib.org/index.shtml) standard, built on the
+//! [LALRPOP](https://github.com/lalrpop/lalrpop) parser generator.
 //!
-//! It is composed of two parts:
-//! 1. A tokenizer, which can be found in [crate::tokens::Tokenizer]; given an iterator of [char]s,
-//!    it tokenizes them into an iterator of SMTLib tokens;
-//! 2. A number of parsers, in the form of callbacks; given an implementation of the corresponding
-//!    trait, e.g. [crate::action::ParsingAction], a parser in [crate::smtlib2] parses an iteration
-//!    of tokens, and callbacks the functions defined in the trait at appropriate timings, or errors
-//!    out, if the tokens are grammatically mal-formed.
+//! ## Architecture
 //!
-//! One example of how to use this crate is to see [crate::action::UnitAction]. This object trivially
-//! admits all parsing actions, so it accepts and only accepts grammatically well-formed SMT scripts.
+//! Yaspar is composed of two stages:
+//!
+//! 1. **Tokenization** — [`tokens::Tokenizer`] consumes any `Iterator<Item = char>` and produces
+//!    a stream of SMT-LIB tokens. Because it operates on a generic char iterator, it can
+//!    efficiently tokenize from files, network streams, or in-memory strings without requiring
+//!    the entire input to be buffered.
+//!
+//! 2. **Parsing via callbacks** — The LALRPOP-generated parsers in [`smtlib2`] drive parsing by
+//!    invoking trait methods on a user-supplied action object. Implement the trait hierarchy
+//!    rooted at [`action::ParsingAction`] to receive callbacks for each syntactic construct
+//!    (constants, identifiers, sorts, terms, and commands). If the token stream is
+//!    grammatically malformed, the parser returns an error.
+//!
+//! ## Quick start
+//!
+//! The simplest way to validate an SMT-LIB script:
+//!
+//! ```rust
+//! use yaspar::Parser;
+//!
+//! let input = "(declare-const x Int)\n(assert (> x 0))\n(check-sat)";
+//! assert!(Parser::new().parse(input).is_ok());
+//! ```
+//!
+//! For custom AST construction, implement the callback traits (see [`action`] module) and
+//! pass your action object to a parser directly:
+//!
+//! ```rust
+//! use yaspar::action::UnitAction;
+//! use yaspar::{smtlib2, tokenize_str};
+//!
+//! let input = "(assert (= x 1))";
+//! let result = smtlib2::CommandParser::new()
+//!     .parse(&mut UnitAction, tokenize_str(input, false));
+//! assert!(result.is_ok());
+//! ```
+//!
+//! ## Block comments
+//!
+//! SMT-LIB 2.7 introduces `#| ... |#` block comments. These are disabled by default for
+//! backward compatibility. Enable them via [`Parser::with_block_comments`] or by passing
+//! `true` to [`tokenize_str`].
+//!
+//! ## Modules
+//!
+//! - [`action`] — Callback traits and the no-op [`action::UnitAction`] reference implementation.
+//! - [`ast`] — Data types for parsed values: keywords, sort/datatype/function declarations, and
+//!   grammar errors.
+//! - [`tokens`] — The [`tokens::Tokenizer`] and the [`tokens::Token`] enum.
+//! - [`position`] — Source location types ([`position::Position`] and [`position::Range`])
+//!   attached to every token and error.
 
 use crate::action::UnitAction;
 pub use crate::tokens::Tokenizer;
@@ -31,22 +76,37 @@ pub use crate::utils::{binary_to_string, hex_to_string};
 
 lalrpop_mod!(pub smtlib2);
 
-/// converts an SMT string into a normal Rust string
+/// Converts an SMT-LIB string literal into a Rust [`String`].
+///
+/// Strips the surrounding double quotes and unescapes doubled quotes (`""` → `"`).
+///
+/// # Panics
+///
+/// Panics if `s` is shorter than 2 characters (i.e. not a valid quoted string).
 pub fn smt_string_to_string(s: &str) -> String {
     s[1..s.len() - 1].replace("\"\"", "\"")
 }
 
-/// converts a quoted symbol representation to a string
+/// Converts a quoted symbol (`|...|`) into a plain [`String`] by stripping the pipe delimiters.
+///
+/// # Panics
+///
+/// Panics if `s` is shorter than 2 characters.
 pub fn smt_quoted_symbol_to_string(s: &str) -> String {
     s[1..s.len() - 1].to_string()
 }
 
-/// if s is a symbol, decide whether it is a simple symbol
+/// Returns `true` if `s` is a valid SMT-LIB *simple* symbol.
+///
+/// A simple symbol starts with a non-digit character from the SMT-LIB simple character set
+/// and every subsequent character also belongs to that set.
 pub fn is_simple_symbol(s: &str) -> bool {
     s.len() > 1 && is_simple_start(s.chars().next().unwrap()) && s.chars().all(is_simple)
 }
 
-/// obtain a tokenizer from a string
+/// Creates a [`Tokenizer`] from a string slice.
+///
+/// Set `allow_block_comments` to `true` to enable `#| ... |#` block comment syntax.
 pub fn tokenize_str(
     s: &str,
     allow_block_comments: bool,
@@ -54,21 +114,45 @@ pub fn tokenize_str(
     Tokenizer::new(s.chars(), allow_block_comments)
 }
 
+/// A convenience wrapper that tokenizes and parses an SMT-LIB script in one step.
+///
+/// Uses [`UnitAction`] internally, so it validates grammatical correctness without
+/// building an AST. Returns `Ok(())` on success or an error message on failure.
+///
+/// # Examples
+///
+/// ```rust
+/// use yaspar::Parser;
+///
+/// // Block comments disabled (default)
+/// let parser = Parser::new();
+/// assert!(parser.parse("(check-sat)").is_ok());
+///
+/// // Block comments enabled
+/// let parser = Parser::with_block_comments(true);
+/// assert!(parser.parse("#| comment |# (check-sat)").is_ok());
+/// ```
 pub struct Parser {
     allow_block_comments: bool,
 }
 
 impl Parser {
+    /// Creates a parser with block comments disabled.
     pub fn new() -> Self {
         Self::with_block_comments(false)
     }
 
+    /// Creates a parser with configurable block comment support.
     pub fn with_block_comments(allow_block_comments: bool) -> Self {
         Self {
             allow_block_comments,
         }
     }
 
+    /// Parses the given SMT-LIB script string.
+    ///
+    /// Returns `Ok(())` if the script is grammatically valid, or `Err` with a
+    /// human-readable error message otherwise.
     pub fn parse(&self, input: &str) -> Result<(), String> {
         if !self.allow_block_comments && input.contains("#|") {
             return Err(
