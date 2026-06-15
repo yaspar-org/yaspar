@@ -29,7 +29,7 @@ use std::str::FromStr;
 ///
 /// Each variant corresponds to a standard SMT-LIB 2.7 command. The tokenizer maps
 /// command strings (e.g. `"assert"`, `"check-sat"`) to these variants via [`COMMAND_MAP`].
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Command {
     Assert,
     CheckSat,
@@ -153,7 +153,7 @@ impl Display for Command {
 /// - Parentheses: [`Lparen`](Token::Lparen), [`Rparen`](Token::Rparen)
 /// - Keywords: [`Keyword`](Token::Keyword)
 /// - Commands: [`Command`](Token::Command)
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Token {
     // Literals
     Numeral(UBig),

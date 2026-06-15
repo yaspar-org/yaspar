@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 /// Errors that can occur during tokenization or grammar-level validation.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum GrammarError {
     /// An invalid token was encountered at the given source range.
     TokenizeError { range: Range, buf: String },
@@ -92,7 +92,7 @@ impl Display for GrammarError {
 ///
 /// Predefined keywords for standard options and info flags are represented as dedicated
 /// variants. All other keywords are captured by [`Keyword::Other`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Keyword {
     // Options
     DiagnosticOutputChannel,
