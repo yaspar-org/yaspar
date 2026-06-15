@@ -14,7 +14,7 @@ use std::fmt::Display;
 /// All fields are 0-based internally. The [`Display`] implementation shows 1-based
 /// line and column numbers for human-readable output.
 // todo: lalrpop requires position information to implement Copy. this is not optimal. remove Copy once lalrpop fixes this problem
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Position {
     /// Line number; 0 based
     pub lin_num: usize,
@@ -59,7 +59,7 @@ impl Default for Position {
 }
 
 /// A half-open source range `[start, end)` used to locate tokens and errors.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Range {
     pub start: Position,
     /// exclusive
