@@ -49,6 +49,7 @@ jobs:
         rust: [ stable ]
         features:
           - ''
+          - 'no-pattern'
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read

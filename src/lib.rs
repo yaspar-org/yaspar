@@ -7,6 +7,18 @@
 //! [SMT-LIB 2.7](https://smt-lib.org/index.shtml) standard, built on the
 //! [LALRPOP](https://github.com/lalrpop/lalrpop) parser generator.
 //!
+//! ## Cargo features
+//!
+//! - **`no-pattern`** *(off by default)* — enable parsing of the non-standard
+//!   `:no-pattern <term>` quantifier attribute. This is an *anti-trigger* hint
+//!   emitted by Dafny/Boogie: it names a term that must **not** be used as an
+//!   e-matching trigger. Unlike `:pattern` (which takes a parenthesized list of
+//!   terms), `:no-pattern` takes a single term. It is gated because it is not
+//!   part of the SMT-LIB 2.7 standard; with the feature off, `:no-pattern` is
+//!   rejected like any other unrecognized attribute so the parser stays
+//!   strictly conformant. When enabled, the parser accepts it and invokes
+//!   [`action::ActionOnAttribute::on_attribute_no_pattern`].
+//!
 //! ## Architecture
 //!
 //! Yaspar is composed of two stages:
@@ -256,6 +268,38 @@ mod test {
             AttributeParser::new()
                 .parse(&mut UnitAction, wrap_iter(":pattern ( true )"))
                 .is_ok()
+        );
+    }
+
+    /// `:no-pattern <term>` parsing is gated behind the `no-pattern` feature.
+    /// With the feature on it takes a single term value (unlike `:pattern`,
+    /// which takes a parenthesized list); with it off it is rejected like any
+    /// other unrecognized attribute.
+    #[cfg(feature = "no-pattern")]
+    #[test]
+    fn test_no_pattern_attribute() {
+        // Both the simple-symbol and application forms must parse.
+        assert!(
+            AttributeParser::new()
+                .parse(&mut UnitAction, wrap_iter(":no-pattern abc"))
+                .is_ok()
+        );
+        assert!(
+            AttributeParser::new()
+                .parse(&mut UnitAction, wrap_iter(":no-pattern (f x)"))
+                .is_ok()
+        );
+    }
+
+    #[cfg(not(feature = "no-pattern"))]
+    #[test]
+    fn test_no_pattern_rejected_without_feature() {
+        // Without the feature, `:no-pattern` is not part of the grammar and
+        // must be rejected, keeping the parser strictly SMT-LIB conformant.
+        assert!(
+            AttributeParser::new()
+                .parse(&mut UnitAction, wrap_iter(":no-pattern (f x)"))
+                .is_err()
         );
     }
 

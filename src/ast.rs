@@ -121,6 +121,10 @@ pub enum Keyword {
 
     Named,
     Pattern,
+    /// The non-standard `:no-pattern` attribute keyword. Only produced when the
+    /// `no-pattern` crate feature is enabled (see the crate-level docs).
+    #[cfg(feature = "no-pattern")]
+    NoPattern,
     /// this captures all other keywords
     Other(String),
 }
@@ -149,6 +153,10 @@ pub static KEYWORD_MAP: phf::Map<&'static str, Keyword> = phf_map! {
     ":version" => Keyword::Version,
     ":named" => Keyword::Named,
     ":pattern" => Keyword::Pattern,
+    // NOTE: `:no-pattern` (feature `no-pattern`) is intentionally NOT in this
+    // map: `phf_map!` entries cannot be `#[cfg]`-gated, and `Keyword::NoPattern`
+    // only exists under the feature. The tokenizer special-cases it instead
+    // (see `tokens.rs`).
 };
 
 impl Keyword {
@@ -178,6 +186,8 @@ impl Keyword {
             Keyword::Version => "version",
             Keyword::Named => "named",
             Keyword::Pattern => "pattern",
+            #[cfg(feature = "no-pattern")]
+            Keyword::NoPattern => "no-pattern",
             Keyword::Other(s) => s,
         }
     }
