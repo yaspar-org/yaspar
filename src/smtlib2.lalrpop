@@ -41,6 +41,7 @@ extern {
         ")" => Token::Rparen,
         ":named" => Token::Keyword(Keyword::Named),
         ":pattern" => Token::Keyword(Keyword::Pattern),
+        #[cfg(feature = "no-pattern")] ":no-pattern" => Token::Keyword(Keyword::NoPattern),
         "<keyword>" => Token::Keyword(<Keyword>),
         "assert" => Token::Command(crate::tokens::Command::Assert),
         "check-sat" => Token::Command(crate::tokens::Command::CheckSat),
@@ -146,6 +147,7 @@ pub Identifier: T::Identifier = {
 pub Attribute: T::Attribute = {
     <start: @L> ":named" <s:Symbol> <end: @R> =>? recursor.on_attribute_named(Range::new(start, end), s),
     <start: @L> ":pattern" "(" <ts:Term*> ")" <end: @R> =>? recursor.on_attribute_pattern(Range::new(start, end), ts),
+    #[cfg(feature = "no-pattern")] <start: @L> ":no-pattern" <t:Term> <end: @R> =>? recursor.on_attribute_no_pattern(Range::new(start, end), t),
     <start: @L> <k:Keyword> <end: @R> =>? recursor.on_attribute_keyword(Range::new(start, end), k),
     <start: @L> <k:Keyword> <s:SpecConstant> <end: @R> =>? recursor.on_attribute_constant(Range::new(start, end), k, s),
     <start: @L> <k:Keyword> <s:Symbol> <end: @R> =>? recursor.on_attribute_symbol(Range::new(start, end), k, s),

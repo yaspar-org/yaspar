@@ -236,6 +236,17 @@ pub trait ActionOnAttribute: ActionOnConstant {
         range: Range,
         patterns: Vec<Self::Term>,
     ) -> ParsingResult<Self::Attribute>;
+    /// Called for a `:no-pattern <term>` attribute (an anti-trigger hint naming
+    /// a term that must not be used as an e-matching trigger). Unlike
+    /// [`Self::on_attribute_pattern`], it receives a single term. Only present
+    /// when the `no-pattern` crate feature is enabled; otherwise `:no-pattern`
+    /// is not part of the grammar. See the crate-level docs.
+    #[cfg(feature = "no-pattern")]
+    fn on_attribute_no_pattern(
+        &mut self,
+        range: Range,
+        term: Self::Term,
+    ) -> ParsingResult<Self::Attribute>;
 }
 
 /// Callbacks for sort expressions.
@@ -590,6 +601,15 @@ impl ActionOnAttribute for UnitAction {
         &mut self,
         _range: Range,
         _patterns: Vec<Self::Term>,
+    ) -> ParsingResult<Self::Attribute> {
+        Ok(())
+    }
+
+    #[cfg(feature = "no-pattern")]
+    fn on_attribute_no_pattern(
+        &mut self,
+        _range: Range,
+        _term: Self::Term,
     ) -> ParsingResult<Self::Attribute> {
         Ok(())
     }
@@ -1058,6 +1078,15 @@ mod test {
             &mut self,
             _range: Range,
             _patterns: Vec<Self::Term>,
+        ) -> ParsingResult<Self::Attribute> {
+            Ok(())
+        }
+
+        #[cfg(feature = "no-pattern")]
+        fn on_attribute_no_pattern(
+            &mut self,
+            _range: Range,
+            _term: Self::Term,
         ) -> ParsingResult<Self::Attribute> {
             Ok(())
         }
