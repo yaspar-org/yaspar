@@ -129,6 +129,7 @@ pub enum Keyword {
     Other(String),
 }
 
+#[cfg(not(feature = "no-pattern"))]
 pub static KEYWORD_MAP: phf::Map<&'static str, Keyword> = phf_map! {
     ":diagnostic-output-channel" => Keyword::DiagnosticOutputChannel,
     ":global-declarations" => Keyword::GlobalDeclarations,
@@ -153,10 +154,37 @@ pub static KEYWORD_MAP: phf::Map<&'static str, Keyword> = phf_map! {
     ":version" => Keyword::Version,
     ":named" => Keyword::Named,
     ":pattern" => Keyword::Pattern,
-    // NOTE: `:no-pattern` (feature `no-pattern`) is intentionally NOT in this
-    // map: `phf_map!` entries cannot be `#[cfg]`-gated, and `Keyword::NoPattern`
-    // only exists under the feature. The tokenizer special-cases it instead
-    // (see `tokens.rs`).
+};
+
+// unfortunately, phf does not support cfg flag
+//
+// c.f. https://github.com/rust-phf/rust-phf/issues/449
+#[cfg(feature = "no-pattern")]
+pub static KEYWORD_MAP: phf::Map<&'static str, Keyword> = phf_map! {
+    ":diagnostic-output-channel" => Keyword::DiagnosticOutputChannel,
+    ":global-declarations" => Keyword::GlobalDeclarations,
+    ":interactive-mode" => Keyword::InteractiveMode,
+    ":print-success" => Keyword::PrintSuccess,
+    ":produce-assertions" => Keyword::ProduceAssertions,
+    ":produce-assignments" => Keyword::ProduceAssignments,
+    ":produce-models" => Keyword::ProduceModels,
+    ":produce-proofs" => Keyword::ProduceProofs,
+    ":produce-unsat-assertions" => Keyword::ProduceUnsatAssumptions,
+    ":produce-unsat-cores" => Keyword::ProduceUnsatCores,
+    ":random-seed" => Keyword::RandomSeed,
+    ":regular-output-channel" => Keyword::RegularOutputChannel,
+    ":reproducible-resource-limit" => Keyword::ReproducibleResourceLimit,
+    ":verbosity" => Keyword::Verbosity,
+    ":all-statistics" => Keyword::AllStatistics,
+    ":assertion-stack-level" => Keyword::AssertionStackLevel,
+    ":authors" => Keyword::Authors,
+    ":error-behavior" => Keyword::ErrorBehavior,
+    ":name" => Keyword::Name,
+    ":reason-unknown" => Keyword::ReasonUnknown,
+    ":version" => Keyword::Version,
+    ":named" => Keyword::Named,
+    ":pattern" => Keyword::Pattern,
+    ":no-pattern" => Keyword::NoPattern,
 };
 
 impl Keyword {

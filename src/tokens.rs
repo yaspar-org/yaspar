@@ -682,13 +682,6 @@ where
                     // simple symbols excludes commands and reserved words!
                     Err(self.bad_token(buf, start))
                 } else {
-                    // `:no-pattern` is gated behind the `no-pattern` feature and
-                    // cannot live in the (compile-time) KEYWORD_MAP because its
-                    // `Keyword` variant is itself feature-gated; special-case it.
-                    #[cfg(feature = "no-pattern")]
-                    if buf == ":no-pattern" {
-                        return Ok(self.return_token(Token::Keyword(Keyword::NoPattern), start));
-                    }
                     match KEYWORD_MAP.get(&buf) {
                         None => Ok(self.return_token(
                             Token::Keyword(Keyword::Other(buf[1..].to_string())),
