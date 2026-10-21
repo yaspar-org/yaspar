@@ -925,11 +925,10 @@ mod test {
     use super::*;
     use crate::Tokenizer;
     use crate::smtlib2::ScriptParser;
-    use derive_new::new;
     use std::fs;
     use std::path::PathBuf;
 
-    #[derive(Debug, Default, new, PartialEq, Eq)]
+    #[derive(Debug, Default, PartialEq, Eq)]
     struct TestCommandFolder {
         assert_count: u32,
         check_sat_count: u32,
@@ -1431,6 +1430,13 @@ mod test {
         ScriptParser::new()
             .parse(&mut folder, Tokenizer::new(script.chars(), false))
             .unwrap_or_else(|_| panic!("Failed to parse input file: {filename}"));
-        assert_eq!(folder, TestCommandFolder::new(1, 1, 1));
+        assert_eq!(
+            folder,
+            TestCommandFolder {
+                assert_count: 1,
+                check_sat_count: 1,
+                check_sat_assuming_count: 1,
+            }
+        );
     }
 }
