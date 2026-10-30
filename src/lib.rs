@@ -113,7 +113,7 @@ pub fn smt_quoted_symbol_to_string(s: &str) -> String {
 /// A simple symbol starts with a non-digit character from the SMT-LIB simple character set
 /// and every subsequent character also belongs to that set.
 pub fn is_simple_symbol(s: &str) -> bool {
-    s.len() > 1 && is_simple_start(s.chars().next().unwrap()) && s.chars().all(is_simple)
+    !s.is_empty() && is_simple_start(s.chars().next().unwrap()) && s.chars().all(is_simple)
 }
 
 /// Creates a [`Tokenizer`] from a string slice.
@@ -235,6 +235,52 @@ mod test {
                 .parse(r#"#| two words |# (assert (= 1 1))"#)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn test_unterminated_block_comment() {
+        assert!(
+            Parser::with_block_comments(true)
+                .parse("(assert true) #| no end")
+                .is_err()
+        );
+        assert!(Parser::with_block_comments(true).parse("#|").is_err());
+    }
+
+    #[test]
+    fn test_quoted_reserved_words() {
+        assert!(
+            Parser::new()
+                .parse("(set-logic ALL)\n(declare-const |assert| Int)\n(declare-const |_| Int)")
+                .is_ok()
+        );
+        assert!(Parser::new().parse("(declare-const assert Int)").is_err());
+    }
+
+    #[test]
+    fn test_is_simple_symbol() {
+        assert!(is_simple_symbol("x"));
+        assert!(is_simple_symbol("+"));
+        assert!(is_simple_symbol("="));
+        assert!(is_simple_symbol("abc"));
+        assert!(!is_simple_symbol(""));
+        assert!(!is_simple_symbol("1"));
+    }
+
+    #[test]
+    fn test_keyword_spelling() {
+        use crate::ast::{KEYWORD_MAP, Keyword};
+        assert_eq!(
+            KEYWORD_MAP.get(":produce-unsat-assumptions"),
+            Some(&Keyword::ProduceUnsatAssumptions)
+        );
+        assert_eq!(
+            KEYWORD_MAP.get(":assertion-stack-levels"),
+            Some(&Keyword::AssertionStackLevels)
+        );
+        for (k, v) in KEYWORD_MAP.into_iter() {
+            assert_eq!(&k[1..], v.symbol_of());
+        }
     }
 
     #[test]

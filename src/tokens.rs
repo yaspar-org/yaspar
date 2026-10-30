@@ -434,12 +434,18 @@ where
         self.handle_block_comment && self.next_if_match("#|")
     }
 
-    fn ignore_block_comment(&mut self) {
+    /// consume a block comment after its head `#|`; return an error if the input ends before `|#`
+    fn ignore_block_comment(&mut self, start: Position) -> Result<(), GrammarError> {
+        let mut buf = String::from("#|");
         loop {
             if self.next_if_match("|#") {
-                break;
+                return Ok(());
             }
-            self.next_char();
+            match self.next_char() {
+                Some(c) => buf.push(c),
+                // unterminated block comment
+                None => return Err(self.bad_token(buf, start)),
+            }
         }
     }
 
@@ -447,15 +453,16 @@ where
     ///
     /// 1. white spaces
     /// 2. comments (block comment as well if configured)
-    fn ignore_spaces_and_comments(&mut self) {
+    fn ignore_spaces_and_comments(&mut self) -> Result<(), GrammarError> {
         loop {
             self.ignore_whitespace();
+            let start = self.position;
             if self.next_with_pred(|c| c == ';').is_some() {
                 self.ignore_line_comment();
             } else if self.lead_with_block_comment_head() {
-                self.ignore_block_comment();
+                self.ignore_block_comment(start)?;
             } else {
-                break;
+                return Ok(());
             }
         }
     }
@@ -666,7 +673,8 @@ where
             Err(self.bad_token_until_delimited(buf, start))
         } else {
             let buf = smt_quoted_symbol_to_string(&buf);
-            Ok(self.return_symbol(buf, start, false))
+            // a quoted symbol is never a reserved word, e.g. |assert| is not the command assert
+            Ok(self.return_token(Token::QuotSymbol(buf), start))
         }
     }
 
@@ -707,20 +715,14 @@ where
         let mut buf = String::new();
         buf.push(c);
         let (buf, start) = self.next_expecting_simple_symbol(buf, start)?;
-        Ok(self.return_symbol(buf, start, true))
+        Ok(self.return_symbol(buf, start))
     }
 
-    /// given a token, we refine it further if it's a command or a special symbol
-    fn return_symbol(&self, buf: String, start: Position, is_simp: bool) -> RangedToken {
+    /// given a simple symbol, we refine it further if it's a command or a special symbol
+    fn return_symbol(&self, buf: String, start: Position) -> RangedToken {
         match COMMAND_MAP.get(&buf) {
             None => match SPECIAL_SYMBOLS.get(&buf) {
-                None => {
-                    if is_simp {
-                        self.return_token(Token::SimpSymbol(buf), start)
-                    } else {
-                        self.return_token(Token::QuotSymbol(buf), start)
-                    }
-                }
+                None => self.return_token(Token::SimpSymbol(buf), start),
                 Some(tok) => self.return_token(tok.clone(), start),
             },
             Some(cmd) => self.return_token(Token::Command(*cmd), start),
@@ -757,7 +759,9 @@ where
 
     /// return the next token
     pub fn next_token(&mut self) -> Option<TokenizeResult> {
-        self.ignore_spaces_and_comments();
+        if let Err(e) = self.ignore_spaces_and_comments() {
+            return Some(Err(e));
+        }
         let start = self.position;
         let c = self.next_char()?;
         Some(match c {
@@ -825,6 +829,8 @@ mod tests {
         assert_eq!(tok_block("#|;hello world\n\n\n bar baz|#"), None);
         assert!(tok_no_block("1#|").unwrap().is_err());
         assert!(tok_block("1#|").unwrap().is_ok());
+        assert!(tok_block("#| no end").unwrap().is_err());
+        assert!(tok_block("#|").unwrap().is_err());
     }
 
     #[test]
@@ -1181,12 +1187,15 @@ z" "#
             assert_eq!(tok_no_block(k).unwrap(), Ok(Token::Command(*v)));
             assert_eq!(
                 tok_no_block(&format!("|{k}|")).unwrap(),
-                Ok(Token::Command(*v))
+                Ok(Token::QuotSymbol(k.to_string()))
             );
         }
         for (k, v) in SPECIAL_SYMBOLS.into_iter() {
             assert_eq!(tok_no_block(k).unwrap(), Ok(v.clone()));
-            assert_eq!(tok_no_block(&format!("|{k}|")).unwrap(), Ok(v.clone()));
+            assert_eq!(
+                tok_no_block(&format!("|{k}|")).unwrap(),
+                Ok(Token::QuotSymbol(k.to_string()))
+            );
         }
         assert_eq!(
             tok_no_block("; foo bar\n    baz").unwrap(),
