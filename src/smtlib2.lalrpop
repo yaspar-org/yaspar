@@ -319,7 +319,11 @@ pub Command: T::Command = {
 
     <start: @L> "(" "pop" <n:"<numeral>"> ")" <end: @R> =>? recursor.on_command_pop(Range::new(start, end), n),
 
+    <start: @L> "(" "pop" ")" <end: @R> =>? recursor.on_command_pop(Range::new(start, end), UBig::ONE),
+
     <start: @L> "(" "push" <n:"<numeral>"> ")" <end: @R> =>? recursor.on_command_push(Range::new(start, end), n),
+
+    <start: @L> "(" "push" ")" <end: @R> =>? recursor.on_command_push(Range::new(start, end), UBig::ONE),
 
     <start: @L> "(" "reset" ")" <end: @R> =>? recursor.on_command_reset(Range::new(start, end)),
 
