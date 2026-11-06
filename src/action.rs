@@ -933,6 +933,8 @@ mod test {
         assert_count: u32,
         check_sat_count: u32,
         check_sat_assuming_count: u32,
+        /// number of attributes passed to each `on_term_annotated` call
+        annotated: Vec<usize>,
     }
 
     impl ActionOnString for TestCommandFolder {
@@ -1181,8 +1183,9 @@ mod test {
             &mut self,
             _range: Range,
             _t: Self::Term,
-            _attributes: Vec<Self::Attribute>,
+            attributes: Vec<Self::Attribute>,
         ) -> ParsingResult<Self::Term> {
+            self.annotated.push(attributes.len());
             Ok(())
         }
     }
@@ -1436,7 +1439,51 @@ mod test {
                 assert_count: 1,
                 check_sat_count: 1,
                 check_sat_assuming_count: 1,
+                annotated: vec![],
             }
         );
+    }
+
+    // Unknown attributes in term annotations are parsed and ignored.
+    #[test]
+    fn test_unknown_term_attributes_ignored() {
+        use crate::smtlib2::TermParser;
+        let cases: &[(&str, Vec<usize>)] = &[
+            // all unknown: no annotated callback at all
+            ("(! x :weight 3)", vec![]),
+            ("(! x :blah)", vec![]),
+            ("(! x :qid |a b| :skolemid sk :foo)", vec![]),
+            ("(! x :foo (a (b 1 :k) (let as _ !) \"s\" #x0))", vec![]),
+            ("(! x :produce-models true)", vec![]),
+            // known ones survive, unknown ones are dropped
+            ("(! x :weight 3 :named n)", vec![1]),
+            ("(! x :qid q :pattern ((f x)) :foo () :named n)", vec![2]),
+            // nested
+            ("(! (! x :foo) :named n)", vec![1]),
+        ];
+        for (input, expected) in cases {
+            let mut folder = TestCommandFolder::default();
+            TermParser::new()
+                .parse(&mut folder, Tokenizer::new(input.chars(), false))
+                .unwrap_or_else(|e| panic!("failed to parse {input}: {e:?}"));
+            assert_eq!(&folder.annotated, expected, "{input}");
+        }
+        // malformed values are still rejected
+        for input in [
+            "(! x :foo (a)",
+            "(! x :foo ))",
+            "(! x :foo :named)",
+            "(! x)",
+        ] {
+            assert!(
+                TermParser::new()
+                    .parse(
+                        &mut TestCommandFolder::default(),
+                        Tokenizer::new(input.chars(), false)
+                    )
+                    .is_err(),
+                "{input}"
+            );
+        }
     }
 }

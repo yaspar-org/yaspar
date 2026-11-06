@@ -15,9 +15,18 @@
 //!   e-matching trigger. Unlike `:pattern` (which takes a parenthesized list of
 //!   terms), `:no-pattern` takes a single term. It is gated because it is not
 //!   part of the SMT-LIB 2.7 standard; with the feature off, `:no-pattern` is
-//!   rejected like any other unrecognized attribute so the parser stays
-//!   strictly conformant. When enabled, the parser accepts it and invokes
+//!   treated like any other unrecognized attribute (ignored inside term
+//!   annotations, see below). When enabled, the parser accepts it and invokes
 //!   [`action::ActionOnAttribute::on_attribute_no_pattern`].
+//!
+//! ## Term annotations
+//!
+//! In `(! t attr+)`, only `:named`, `:pattern` (and `:no-pattern` with the feature
+//! on) are recognized. Every other attribute is parsed (its value may be any
+//! `<attribute_value>`, including s-expressions) and **ignored**: no callback is
+//! invoked for it and it is not passed to
+//! [`action::ActionOnTerm::on_term_annotated`]. If all attributes of an annotation
+//! are ignored, the annotation disappears and `t` is returned as is.
 //!
 //! ## Architecture
 //!
