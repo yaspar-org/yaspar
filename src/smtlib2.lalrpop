@@ -218,7 +218,62 @@ pub Term: T::Term = {
     <start: @L> "(" "forall" "(" <s: SortedVar+> ")" <t: Term> ")" <end: @R> =>? recursor.on_term_forall(Range::new(start, end), s, t),
     <start: @L> "(" "exists" "(" <s: SortedVar+> ")" <t: Term> ")" <end: @R> =>? recursor.on_term_exists(Range::new(start, end), s, t),
     <start: @L> "(" "match" <t: Term> "(" <m:MatchCase+> ")" ")" <end: @R> =>? recursor.on_term_match(Range::new(start, end), t, m),
-    <start: @L> "(" "!" <t: Term> <a: Attribute+> ")" <end: @R> =>? recursor.on_term_annotated(Range::new(start, end), t, a),
+    <start: @L> "(" "!" <t: Term> <a: TermAttribute+> ")" <end: @R> =>? {
+        let a: Vec<_> = a.into_iter().flatten().collect();
+        if a.is_empty() {
+            // every annotation was unknown and ignored
+            Ok(t)
+        } else {
+            recursor.on_term_annotated(Range::new(start, end), t, a)
+        }
+    },
+}
+
+// Attributes inside a term annotation `(! t ...)`.
+//
+// Only `:named`, `:pattern` (and `:no-pattern` with the feature on) are meaningful on
+// terms. Any other attribute is ignored: it is parsed with an arbitrary
+// 〈attribute_value> (including s-expressions), no callback is invoked, and it is
+// dropped (`None`).
+TermAttribute: Option<T::Attribute> = {
+    <start: @L> ":named" <s:Symbol> <end: @R> =>? recursor.on_attribute_named(Range::new(start, end), s).map(Some),
+    <start: @L> ":pattern" "(" <ts:Term*> ")" <end: @R> =>? recursor.on_attribute_pattern(Range::new(start, end), ts).map(Some),
+    #[cfg(feature = "no-pattern")] <start: @L> ":no-pattern" <t:Term> <end: @R> =>? recursor.on_attribute_no_pattern(Range::new(start, end), t).map(Some),
+    "<keyword>" => None,
+    "<keyword>" IgnoredAttributeValue => None,
+}
+
+//〈attribute_value>::=〈spec_constant>|〈symbol>| (〈s_expr >∗), parsed without callbacks.
+IgnoredAttributeValue: () = {
+    "<numeral>" => (),
+    "<decimal>" => (),
+    "<hexadecimal>" => (),
+    "<binary>" => (),
+    "<string>" => (),
+    "true" => (),
+    "false" => (),
+    "<simp-symbol>" => (),
+    "<quot-symbol>" => (),
+    "(" IgnoredSExpr* ")" => (),
+}
+
+//〈s_expr>::=〈spec_constant>|〈symbol >|〈reserved >|〈keyword >| (〈s_expr >∗ ), parsed without callbacks.
+IgnoredSExpr: () = {
+    IgnoredAttributeValue => (),
+    "BINARY" => (), "DECIMAL" => (), "HEXADECIMAL" => (), "STRING" => (),
+    "_" => (), "!" => (), "as" => (), "let" => (), "exists" => (), "forall" => (),
+    "match" => (), "par" => (), "lambda" => (),
+    ":named" => (), ":pattern" => (),
+    #[cfg(feature = "no-pattern")] ":no-pattern" => (),
+    "<keyword>" => (),
+    "assert" => (), "check-sat" => (), "check-sat-assuming" => (), "declare-const" => (),
+    "declare-datatype" => (), "declare-datatypes" => (), "declare-fun" => (), "declare-sort" => (),
+    "declare-sort-parameter" => (), "define-const" => (), "define-fun" => (), "define-fun-rec" => (),
+    "define-funs-rec" => (), "define-sort" => (), "echo" => (), "exit" => (),
+    "get-assertions" => (), "get-assignment" => (), "get-info" => (), "get-model" => (),
+    "get-option" => (), "get-proof" => (), "get-unsat-assumptions" => (), "get-unsat-core" => (),
+    "get-value" => (), "pop" => (), "push" => (), "reset" => (), "reset-assertions" => (),
+    "set-info" => (), "set-logic" => (), "set-option" => (),
 }
 
 // <sort_dec> ::= ( <symbol > <numeral > )
